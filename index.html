@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro de Vehículos</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --ink:#1b2430; --mut:#6b7785; --pri:#1f4e8c; --err:#b3261e; --ok:#1b7f3b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--pri); color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  header h1 { font-size:18px; margin:0; }
+  header small { opacity:.85; display:block; font-size:12px; }
+  main { max-width:760px; margin:0 auto; padding:12px; }
+  .card { background:var(--card); border-radius:10px; padding:12px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  button { font:inherit; padding:10px 14px; border:0; border-radius:8px; background:var(--pri); color:#fff; cursor:pointer; }
+  button.sec { background:#e3e8ee; color:var(--ink); }
+  button:disabled { opacity:.5; }
+  input, select, textarea { width:100%; font:inherit; padding:10px; border:1px solid #c9d1da; border-radius:8px; background:#fff; }
+  label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:140px; }
+  .dom { font-weight:700; font-size:18px; letter-spacing:1px; }
+  .mut { color:var(--mut); font-size:13px; }
+  #msg { position:fixed; bottom:12px; left:12px; right:12px; max-width:560px; margin:auto; padding:12px; border-radius:8px; color:#fff; display:none; z-index:20; }
+  #msg.err { background:var(--err); } #msg.ok { background:var(--ok); }
+  .hidden { display:none !important; }
+  #login { text-align:center; padding:40px 16px; }
+  dialog { border:0; border-radius:12px; width:min(560px,96vw); max-height:92vh; padding:14px; }
+  dialog::backdrop { background:rgba(0,0,0,.45); }
+  .badge { background:rgba(255,255,255,.2); padding:2px 8px; border-radius:10px; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>🚓 Vehículos identificados</h1><small id="who"></small></div>
+  <button class="sec hidden" id="btnOut">Salir</button>
+</header>
+
+<main>
+  <div id="login" class="card">
+    <p>Acceso solo para personal autorizado.</p>
+    <div id="gbtn" style="display:inline-block"></div>
+    <p class="mut" id="cfgWarn"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="card row">
+      <input id="q" placeholder="Buscar dominio, marca, titular, chasis…">
+      <button id="btnNew" class="hidden">+ Agregar</button>
+    </div>
+    <div class="mut" id="count" style="margin:0 4px 8px"></div>
+    <div id="list"></div>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <h3 id="dlgTitle" style="margin-top:0">Vehículo</h3>
+  <div class="card" id="scanBox">
+    <b>Cargar por foto</b>
+    <p class="mut" style="margin:4px 0">Sacá o elegí foto del anverso y del reverso de la tarjeta. Revisá los datos antes de guardar.</p>
+    <div class="row">
+      <div><label>Anverso</label><input type="file" id="f1" accept="image/*" capture="environment"></div>
+      <div><label>Reverso</label><input type="file" id="f2" accept="image/*" capture="environment"></div>
+    </div>
+    <button id="btnScan" class="sec" style="margin-top:8px">Leer datos de las fotos</button>
+    <div class="mut" id="scanSt"></div>
+    <details><summary class="mut">Ver texto leído</summary><textarea id="raw" rows="5" readonly></textarea></details>
+  </div>
+  <form id="frm" method="dialog">
+    <div class="row">
+      <div><label>Dominio *</label><input name="dominio" required maxlength="10"></div>
+      <div><label>Tipo</label><input name="tipo" placeholder="Auto, moto, camioneta…"></div>
+    </div>
+    <div class="row">
+      <div><label>Marca</label><input name="marca"></div>
+      <div><label>Modelo</label><input name="modelo"></div>
+    </div>
+    <div class="row">
+      <div><label>Año</label><input name="anio" inputmode="numeric" maxlength="4"></div>
+      <div><label>Color</label><input name="color"></div>
+    </div>
+    <div class="row">
+      <div><label>N° chasis</label><input name="chasis"></div>
+      <div><label>N° motor</label><input name="motor"></div>
+    </div>
+    <div class="row">
+      <div><label>Titular</label><input name="titular"></div>
+      <div><label>DNI titular</label><input name="dni_titular" inputmode="numeric"></div>
+    </div>
+    <label>Observaciones</label><textarea name="observaciones" rows="2"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="sec" id="btnCancel">Cancelar</button>
+      <button type="submit" id="btnSave">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="msg"></div>
+
+<script>
+/* ====== CONFIGURACIÓN: completar estos dos valores ====== */
+const CLIENT_ID = 'PEGAR_AQUI_TU_CLIENT_ID.apps.googleusercontent.com';
+const API_URL   = 'PEGAR_AQUI_URL_DE_APPS_SCRIPT';
+/* ======================================================= */
+
+const $ = s => document.querySelector(s);
+const FIELDS = ['dominio','tipo','marca','modelo','anio','color','chasis','motor','titular','dni_titular','observaciones'];
+let token = null, nivel = 0, rows = [], editingId = null;
+
+function toast(t, kind) {
+  const m = $('#msg'); m.textContent = t; m.className = kind || 'ok'; m.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => m.style.display = 'none', 4000);
+}
+
+async function api(action, extra) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ action, token }, extra || {}))
+  });
+  const j = await res.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+
+/* ---------- Login ---------- */
+window.addEventListener('load', () => {
+  if (CLIENT_ID.startsWith('PEGAR') || API_URL.startsWith('PEGAR')) {
+    $('#cfgWarn').textContent = 'Falta configurar CLIENT_ID y API_URL en index.html';
+    return;
+  }
+  const t = setInterval(() => {
+    if (window.google && google.accounts) {
+      clearInterval(t);
+      google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCred, auto_select: false });
+      google.accounts.id.renderButton($('#gbtn'), { theme: 'filled_blue', size: 'large', text: 'signin_with', locale: 'es' });
+    }
+  }, 200);
+});
+
+async function onCred(resp) {
+  token = resp.credential;
+  try {
+    const me = await api('me');
+    nivel = me.nivel;
+    $('#who').innerHTML = '';
+    $('#who').append(me.email + ' ');
+    const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'Nivel ' + nivel;
+    $('#who').append(b);
+    $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#btnOut').classList.remove('hidden');
+    $('#btnNew').classList.toggle('hidden', nivel > 2);
+    await load();
+  } catch (e) { token = null; toast(e.message, 'err'); }
+}
+
+$('#btnOut').onclick = () => { token = null; location.reload(); };
+
+/* ---------- Listado ---------- */
+async function load() {
+  try { rows = (await api('list')).rows; render(); }
+  catch (e) { toast(e.message, 'err'); }
+}
+
+function render() {
+  const q = $('#q').value.trim().toLowerCase();
+  const list = $('#list'); list.innerHTML = '';
+  const f = rows.filter(r => !q || FIELDS.some(k => String(r[k]).toLowerCase().includes(q)));
+  $('#count').textContent = f.length + ' de ' + rows.length + ' registros';
+  f.forEach(r => {
+    const c = document.createElement('div'); c.className = 'card';
+    const d = document.createElement('div'); d.className = 'dom'; d.textContent = r.dominio;
+    const l1 = document.createElement('div'); l1.textContent = [r.marca, r.modelo, r.anio, r.color, r.tipo].filter(Boolean).join(' · ');
+    const l2 = document.createElement('div'); l2.className = 'mut';
+    l2.textContent = [r.titular && 'Titular: ' + r.titular, r.dni_titular && 'DNI: ' + r.dni_titular].filter(Boolean).join(' — ');
+    const l3 = document.createElement('div'); l3.className = 'mut';
+    l3.textContent = [r.chasis && 'Chasis: ' + r.chasis, r.motor && 'Motor: ' + r.motor].filter(Boolean).join(' — ');
+    c.append(d, l1, l2, l3);
+    if (r.observaciones) { const o = document.createElement('div'); o.className = 'mut'; o.textContent = '📝 ' + r.observaciones; c.append(o); }
+    if (nivel === 1) { const b = document.createElement('button'); b.className = 'sec'; b.textContent = 'Editar'; b.style.marginTop = '8px'; b.onclick = () => openForm(r); c.append(b); }
+    list.append(c);
+  });
+}
+$('#q').oninput = render;
+
+/* ---------- Formulario ---------- */
+function openForm(r) {
+  editingId = r ? r.id : null;
+  $('#dlgTitle').textContent = r ? 'Modificar vehículo' : 'Agregar vehículo';
+  $('#scanBox').classList.toggle('hidden', !!r);
+  const frm = $('#frm'); frm.reset();
+  FIELDS.forEach(k => frm.elements[k].value = r ? r[k] : '');
+  $('#raw').value = ''; $('#scanSt').textContent = '';
+  $('#dlg').showModal();
+}
+$('#btnNew').onclick = () => openForm(null);
+$('#btnCancel').onclick = () => $('#dlg').close();
+
+$('#frm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const data = {}; FIELDS.forEach(k => data[k] = $('#frm').elements[k].value);
+  $('#btnSave').disabled = true;
+  try {
+    await (editingId ? api('update', { id: editingId, data }) : api('add', { data }));
+    $('#dlg').close(); toast('Guardado'); await load();
+  } catch (e) { toast(e.message, 'err'); }
+  $('#btnSave').disabled = false;
+});
+
+/* ---------- OCR (Tesseract.js, corre en el navegador) ---------- */
+function shrink(file, max = 1800) {
+  return new Promise((res, rej) => {
+    const img = new Image(); const u = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s;
+      const g = c.getContext('2d'); g.filter = 'grayscale(1) contrast(1.3)'; g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(u); c.toBlob(b => res(b), 'image/png');
+    };
+    img.onerror = rej; img.src = u;
+  });
+}
+
+$('#btnScan').onclick = async () => {
+  const files = [$('#f1').files[0], $('#f2').files[0]].filter(Boolean);
+  if (!files.length) return toast('Elegí al menos una foto', 'err');
+  $('#btnScan').disabled = true; let text = '';
+  try {
+    for (let i = 0; i < files.length; i++) {
+      $('#scanSt').textContent = 'Leyendo foto ' + (i + 1) + ' de ' + files.length + '… (la primera vez descarga el idioma)';
+      const blob = await shrink(files[i]);
+      const r = await Tesseract.recognize(blob, 'spa', {
+        logger: m => { if (m.status === 'recognizing text') $('#scanSt').textContent = 'Foto ' + (i + 1) + ': ' + Math.round(m.progress * 100) + '%'; }
+      });
+      text += r.data.text + '\n';
+    }
+    $('#raw').value = text;
+    fillFromText(text);
+    $('#scanSt').textContent = 'Listo. Revisá y corregí los campos antes de guardar.';
+  } catch (e) { toast('No se pudo leer: ' + e.message, 'err'); }
+  $('#btnScan').disabled = false;
+};
+
+function fillFromText(text) {
+  const frm = $('#frm').elements;
+  const T = text.toUpperCase().replace(/[|]/g, 'I');
+  const set = (k, v) => { if (v && !frm[k].value) frm[k].value = v.trim(); };
+  const after = (labels) => {
+    for (const l of labels) {
+      const m = T.match(new RegExp(l + '\\s*[:.\\-]?\\s*([A-Z0-9ÁÉÍÓÚÑ .\\/-]{2,40})'));
+      if (m) return m[1].split(/\s{2,}|\n/)[0];
+    }
+    return '';
+  };
+  const dom = T.match(/\b([A-Z]{2}\s?\d{3}\s?[A-Z]{2}|[A-Z]{3}\s?\d{3}|\d{3}\s?[A-Z]{3}|[A-Z]\d{3}\s?[A-Z]{3})\b/);
+  if (dom) set('dominio', dom[1].replace(/\s/g, ''));
+  const vin = T.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
+  if (vin) set('chasis', vin[0]); else set('chasis', after(['CHASIS', 'N[°º] DE CHASIS']).replace(/\s/g, ''));
+  set('motor', after(['MOTOR', 'N[°º] DE MOTOR']).replace(/\s/g, ''));
+  set('marca', after(['MARCA']));
+  set('modelo', after(['MODELO']));
+  set('tipo', after(['TIPO']));
+  set('color', after(['COLOR']));
+  const yr = after(['MODELO A[ÑN]O', 'A[ÑN]O']).match(/(19|20)\d{2}/) || T.match(/\b(19[89]\d|20[0-3]\d)\b/);
+  if (yr) set('anio', yr[0]);
+  const dni = T.match(/\b\d{1,2}\.?\d{3}\.?\d{3}\b/);
+  if (dni) set('dni_titular', dni[0].replace(/\./g, ''));
+  set('titular', after(['TITULAR', 'APELLIDO Y NOMBRE', 'NOMBRE']));
+}
+</script>
+</body>
+</html>
