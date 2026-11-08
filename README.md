@@ -38,6 +38,17 @@ Copiá la URL (`.../exec`) y pegala en `index.html` (`API_URL`). Si cambiás `Co
 
 El repo no contiene datos ni claves secretas (el Client ID es público por diseño).
 
+## Campos que guarda
+- **Anverso:** dominio, marca, modelo, tipo, uso, chasis, motor.
+- **Reverso:** apellido, nombres, documento, domicilio, localidad, departamento, provincia.
+- **Opcionales:** año, color, observaciones.
+
+## Carga por foto
+Cada lado (anverso y reverso) se puede cargar con **Sacar foto** (cámara) o **Galería** (fotos ya sacadas). Los campos en amarillo conviene revisarlos. Si el chasis no cumple el dígito verificador, la app sugiere la corrección más probable.
+
+## Actualizar el backend sin cambiar la URL
+Apps Script > **Implementar > Gestionar implementaciones > lápiz > Versión: Nueva versión > Implementar**.
+
 ## Notas
 - El OCR (Tesseract.js) corre en el teléfono: gratis y las fotos no se envían a nadie. La precisión es media; por eso siempre se revisa antes de guardar. Foto nítida, bien iluminada y de frente mejora mucho el resultado.
 - Las fotos **no se guardan**, solo los datos.

@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Registro de Vehículos</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <style>
-  :root { --bg:#f4f6f8; --card:#fff; --ink:#1b2430; --mut:#6b7785; --pri:#1f4e8c; --err:#b3261e; --ok:#1b7f3b; }
+  :root { --bg:#f4f6f8; --card:#fff; --ink:#1b2430; --mut:#6b7785; --pri:#1f4e8c; --err:#b3261e; --ok:#1b7f3b; --warn:#e0a800; }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
   header { background:var(--pri); color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
@@ -15,10 +15,11 @@
   header small { opacity:.85; display:block; font-size:12px; }
   main { max-width:760px; margin:0 auto; padding:12px; }
   .card { background:var(--card); border-radius:10px; padding:12px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
-  button { font:inherit; padding:10px 14px; border:0; border-radius:8px; background:var(--pri); color:#fff; cursor:pointer; }
-  button.sec { background:#e3e8ee; color:var(--ink); }
+  button, .btn { font:inherit; padding:10px 14px; border:0; border-radius:8px; background:var(--pri); color:#fff; cursor:pointer; display:inline-block; text-align:center; }
+  button.sec, .btn.sec { background:#e3e8ee; color:var(--ink); }
   button:disabled { opacity:.5; }
   input, select, textarea { width:100%; font:inherit; padding:10px; border:1px solid #c9d1da; border-radius:8px; background:#fff; }
+  input.chk { border-color:var(--warn); background:#fff8e1; }
   label { display:block; font-size:12px; color:var(--mut); margin:8px 0 3px; }
   .row { display:flex; gap:8px; flex-wrap:wrap; }
   .row > * { flex:1; min-width:140px; }
@@ -28,9 +29,18 @@
   #msg.err { background:var(--err); } #msg.ok { background:var(--ok); }
   .hidden { display:none !important; }
   #login { text-align:center; padding:40px 16px; }
-  dialog { border:0; border-radius:12px; width:min(560px,96vw); max-height:92vh; padding:14px; }
+  dialog { border:0; border-radius:12px; width:min(600px,96vw); max-height:94vh; padding:14px; }
   dialog::backdrop { background:rgba(0,0,0,.45); }
   .badge { background:rgba(255,255,255,.2); padding:2px 8px; border-radius:10px; font-size:12px; }
+  h4 { margin:14px 0 2px; font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--pri); }
+  .shot { background:#f4f6f8; border-radius:8px; padding:8px; }
+  .shot .btns { display:flex; gap:6px; margin-top:6px; }
+  .shot .btns .btn { flex:1; padding:8px 6px; font-size:14px; }
+  .thumb { width:100%; max-height:110px; object-fit:cover; border-radius:6px; margin-top:6px; }
+  .sug { margin-top:4px; font-size:13px; }
+  .sug button { padding:4px 10px; font-size:13px; background:var(--warn); color:#1b2430; }
+  .legend { font-size:12px; color:#8a6d00; }
+  details > summary { cursor:pointer; margin-top:8px; }
 </style>
 </head>
 <body>
@@ -48,7 +58,7 @@
 
   <div id="app" class="hidden">
     <div class="card row">
-      <input id="q" placeholder="Buscar dominio, marca, titular, chasis…">
+      <input id="q" placeholder="Buscar dominio, marca, titular, chasis, domicilio…">
       <button id="btnNew" class="hidden">+ Agregar</button>
     </div>
     <div class="mut" id="count" style="margin:0 4px 8px"></div>
@@ -58,61 +68,572 @@
 
 <dialog id="dlg">
   <h3 id="dlgTitle" style="margin-top:0">Vehículo</h3>
+
   <div class="card" id="scanBox">
     <b>Cargar por foto</b>
-    <p class="mut" style="margin:4px 0">Sacá o elegí foto del anverso y del reverso de la tarjeta. Revisá los datos antes de guardar.</p>
+    <p class="mut" style="margin:4px 0 8px">Sacá la foto en el momento o elegí una que ya tengas en la galería. Con la tarjeta en horizontal, bien iluminada y de frente. Revisá los datos antes de guardar.</p>
     <div class="row">
-      <div><label>Anverso</label><input type="file" id="f1" accept="image/*" capture="environment"></div>
-      <div><label>Reverso</label><input type="file" id="f2" accept="image/*" capture="environment"></div>
+      <div class="shot" data-slot="a">
+        <b>Anverso</b> <span class="mut">(frente)</span>
+        <div class="btns">
+          <label class="btn sec">📷 Sacar foto<input type="file" accept="image/*" capture="environment" hidden></label>
+          <label class="btn sec">🖼️ Galería<input type="file" accept="image/*" hidden></label>
+        </div>
+        <img class="thumb hidden" alt="Anverso">
+        <div class="mut nombre"></div>
+      </div>
+      <div class="shot" data-slot="b">
+        <b>Reverso</b> <span class="mut">(titular)</span>
+        <div class="btns">
+          <label class="btn sec">📷 Sacar foto<input type="file" accept="image/*" capture="environment" hidden></label>
+          <label class="btn sec">🖼️ Galería<input type="file" accept="image/*" hidden></label>
+        </div>
+        <img class="thumb hidden" alt="Reverso">
+        <div class="mut nombre"></div>
+      </div>
     </div>
-    <button id="btnScan" class="sec" style="margin-top:8px">Leer datos de las fotos</button>
-    <div class="mut" id="scanSt"></div>
-    <details><summary class="mut">Ver texto leído</summary><textarea id="raw" rows="5" readonly></textarea></details>
+    <button type="button" id="btnScan" style="margin-top:8px;width:100%">Leer datos de las fotos</button>
+    <div class="mut" id="scanSt" style="margin-top:6px"></div>
+    <div class="legend hidden" id="legend">Los campos en amarillo conviene revisarlos.</div>
+    <details><summary class="mut">Ver texto leído</summary><textarea id="raw" rows="6" readonly></textarea></details>
   </div>
+
   <form id="frm" method="dialog">
+    <h4>Vehículo (anverso)</h4>
     <div class="row">
-      <div><label>Dominio *</label><input name="dominio" required maxlength="10"></div>
-      <div><label>Tipo</label><input name="tipo" placeholder="Auto, moto, camioneta…"></div>
+      <div><label>Dominio *</label><input name="dominio" required maxlength="10" autocapitalize="characters"></div>
+      <div><label>Uso</label><input name="uso" list="dlUso" autocapitalize="characters"></div>
     </div>
     <div class="row">
-      <div><label>Marca</label><input name="marca"></div>
-      <div><label>Modelo</label><input name="modelo"></div>
+      <div><label>Marca</label><input name="marca" autocapitalize="characters"></div>
+      <div><label>Modelo</label><input name="modelo" autocapitalize="characters"></div>
     </div>
+    <label>Tipo</label><input name="tipo" autocapitalize="characters" placeholder="Sedan 4 ptas, moto, camioneta…">
+    <label>N° chasis</label><input name="chasis" autocapitalize="characters">
+    <div class="sug hidden" id="sugChasis"></div>
+    <label>N° motor</label><input name="motor" autocapitalize="characters">
+
+    <h4>Titular (reverso)</h4>
     <div class="row">
-      <div><label>Año</label><input name="anio" inputmode="numeric" maxlength="4"></div>
-      <div><label>Color</label><input name="color"></div>
+      <div><label>Apellido</label><input name="apellido" autocapitalize="characters"></div>
+      <div><label>Nombres</label><input name="nombres" autocapitalize="characters"></div>
     </div>
+    <label>Documento (DNI)</label><input name="dni_titular" inputmode="numeric">
+    <label>Domicilio</label><input name="domicilio" autocapitalize="characters" placeholder="Calle, número, piso, depto.">
     <div class="row">
-      <div><label>N° chasis</label><input name="chasis"></div>
-      <div><label>N° motor</label><input name="motor"></div>
+      <div><label>Localidad</label><input name="localidad" autocapitalize="characters"></div>
+      <div><label>Departamento</label><input name="departamento" autocapitalize="characters"></div>
     </div>
-    <div class="row">
-      <div><label>Titular</label><input name="titular"></div>
-      <div><label>DNI titular</label><input name="dni_titular" inputmode="numeric"></div>
-    </div>
-    <label>Observaciones</label><textarea name="observaciones" rows="2"></textarea>
-    <div class="row" style="margin-top:12px">
+    <label>Provincia</label><input name="provincia" list="dlProv" autocapitalize="characters">
+
+    <details><summary class="mut">Otros datos (opcional)</summary>
+      <div class="row">
+        <div><label>Año</label><input name="anio" inputmode="numeric" maxlength="4"></div>
+        <div><label>Color</label><input name="color"></div>
+      </div>
+      <label>Observaciones</label><textarea name="observaciones" rows="2"></textarea>
+    </details>
+
+    <div class="row" style="margin-top:14px">
       <button type="button" class="sec" id="btnCancel">Cancelar</button>
       <button type="submit" id="btnSave">Guardar</button>
     </div>
   </form>
+  <datalist id="dlUso"><option value="PRIVADO"><option value="PUBLICO"><option value="OFICIAL"><option value="DIPLOMATICO"><option value="ESPECIAL"></datalist>
+  <datalist id="dlProv"></datalist>
 </dialog>
 
 <div id="msg"></div>
 
 <script>
-/* ====== CONFIGURACIÓN: completar estos dos valores ====== */
+/* ====== CONFIGURACIÓN ====== */
 const CLIENT_ID = '1058406281293-d308u0qoneaeqkbrmatr6d7rv86jk6l2.apps.googleusercontent.com';
 const API_URL   = 'https://script.google.com/macros/s/AKfycbzN9LyAlQV9MLQQ2MuW4qlgltzXyovCaly1TPSgDKqRhFWlDzyxl-zdmd0sXdulJxm2/exec';
-/* ======================================================= */
+/* =========================== */
+
+/* OCR-CORE-START */
+/* Lector de cédulas azules (DNRPA). Funciona en el navegador y en Node (pruebas).
+   deps = { createCanvas(w,h), canvasToInput(canvas) -> Promise, worker } */
+
+const PROVINCIAS = ['BUENOS AIRES', 'CIUDAD AUTONOMA DE BUENOS AIRES', 'CAPITAL FEDERAL', 'CATAMARCA', 'CHACO', 'CHUBUT',
+  'CORDOBA', 'CORRIENTES', 'ENTRE RIOS', 'FORMOSA', 'JUJUY', 'LA PAMPA', 'LA RIOJA', 'MENDOZA', 'MISIONES', 'NEUQUEN',
+  'RIO NEGRO', 'SALTA', 'SAN JUAN', 'SAN LUIS', 'SANTA CRUZ', 'SANTA FE', 'SANTIAGO DEL ESTERO', 'TIERRA DEL FUEGO', 'TUCUMAN'];
+const MARCAS = ['VOLKSWAGEN', 'FORD', 'CHEVROLET', 'FIAT', 'RENAULT', 'PEUGEOT', 'CITROEN', 'TOYOTA', 'HONDA', 'NISSAN',
+  'MERCEDES BENZ', 'BMW', 'AUDI', 'KIA', 'HYUNDAI', 'SUZUKI', 'YAMAHA', 'MOTOMEL', 'ZANELLA', 'GILERA', 'CORVEN', 'BAJAJ',
+  'KAWASAKI', 'DODGE', 'JEEP', 'CHERY', 'MITSUBISHI', 'IVECO', 'SCANIA', 'VOLVO', 'MAZDA', 'SUBARU', 'DAEWOO', 'LAND ROVER',
+  'SEAT', 'SMART', 'CHRYSLER', 'LIFAN', 'GEELY', 'BYD', 'RAM', 'MINI', 'OPEL', 'PORSCHE', 'LEXUS', 'JAC', 'FOTON', 'HAVAL',
+  'GREAT WALL', 'SSANGYONG', 'TATA', 'MAHINDRA', 'HARLEY DAVIDSON', 'TRIUMPH', 'KTM', 'DUCATI', 'ROYAL ENFIELD', 'KELLER',
+  'BETA', 'SUNDOWN', 'APPIA', 'MONDIAL', 'HERO', 'TVS', 'ZONGSHEN', 'DS'];
+const LOCALIDADES = ['CIUDAD AUTONOMA DE BUENOS AIRES', 'LA PLATA', 'MAR DEL PLATA', 'BAHIA BLANCA', 'TANDIL', 'OLAVARRIA', 'AZUL', 'NECOCHEA',
+  'TRES ARROYOS', 'PERGAMINO', 'JUNIN', 'SAN NICOLAS', 'ZARATE', 'CAMPANA', 'LUJAN', 'MERCEDES', 'CHIVILCOY', 'BRAGADO', 'PEHUAJO',
+  'TRENQUE LAUQUEN', 'GENERAL PICO', 'SANTA ROSA', 'TOAY', 'REALICO', 'CORDOBA', 'RIO CUARTO', 'VILLA MARIA', 'SAN FRANCISCO',
+  'VILLA CARLOS PAZ', 'ALTA GRACIA', 'ROSARIO', 'SANTA FE', 'RAFAELA', 'VENADO TUERTO', 'RECONQUISTA', 'PARANA', 'CONCORDIA',
+  'GUALEGUAYCHU', 'CONCEPCION DEL URUGUAY', 'CORRIENTES', 'RESISTENCIA', 'POSADAS', 'OBERA', 'FORMOSA', 'SAN SALVADOR DE JUJUY',
+  'SALTA', 'SAN MIGUEL DE TUCUMAN', 'SANTIAGO DEL ESTERO', 'LA BANDA', 'SAN FERNANDO DEL VALLE DE CATAMARCA', 'LA RIOJA', 'SAN JUAN',
+  'MENDOZA', 'SAN RAFAEL', 'SAN LUIS', 'VILLA MERCEDES', 'NEUQUEN', 'CIPOLLETTI', 'PLOTTIER', 'CENTENARIO', 'ZAPALA',
+  'SAN MARTIN DE LOS ANDES', 'VILLA LA ANGOSTURA', 'CUTRAL CO', 'PLAZA HUINCUL', 'RINCON DE LOS SAUCES', 'SENILLOSA', 'VIEDMA',
+  'CARMEN DE PATAGONES', 'GENERAL ROCA', 'SAN CARLOS DE BARILOCHE', 'BARILOCHE', 'EL BOLSON', 'ALLEN', 'CINCO SALTOS', 'VILLA REGINA',
+  'CATRIEL', 'CHOELE CHOEL', 'RIO COLORADO', 'SAN ANTONIO OESTE', 'LAS GRUTAS', 'SIERRA GRANDE', 'INGENIERO JACOBACCI', 'LUIS BELTRAN',
+  'LAMARQUE', 'FERNANDEZ ORO', 'CERVANTES', 'INGENIERO HUERGO', 'CHIMPAY', 'DARWIN', 'PICHI MAHUIDA', 'GENERAL CONESA', 'GUARDIA MITRE',
+  'SAN JAVIER', 'COMALLO', 'DINA HUAPI', 'LOS MENUCOS', 'MAQUINCHAO', 'VALCHETA', 'CONA NIYEU', 'TRELEW', 'PUERTO MADRYN', 'RAWSON',
+  'COMODORO RIVADAVIA', 'ESQUEL', 'RIO GALLEGOS', 'CALETA OLIVIA', 'PUERTO DESEADO', 'EL CALAFATE', 'USHUAIA', 'RIO GRANDE', 'TOLHUIN',
+  'LOMAS DE ZAMORA', 'QUILMES', 'LANUS', 'AVELLANEDA', 'MORON', 'SAN ISIDRO', 'TIGRE', 'SAN MARTIN', 'LA MATANZA', 'MORENO', 'MERLO',
+  'FLORENCIO VARELA', 'BERAZATEGUI', 'ALMIRANTE BROWN', 'ESTEBAN ECHEVERRIA', 'EZEIZA', 'SAN MIGUEL', 'JOSE C PAZ', 'PILAR', 'ESCOBAR',
+  'VICENTE LOPEZ', 'TRES DE FEBRERO', 'HURLINGHAM', 'ITUZAINGO', 'BANFIELD', 'TEMPERLEY', 'ADROGUE', 'VILLA GESELL', 'PINAMAR', 'MIRAMAR',
+  'CORONEL SUAREZ', 'PUNTA ALTA', 'MONTE HERMOSO', 'PEDRO LURO', 'MEDANOS', 'HILARIO ASCASUBI', 'VILLALONGA', 'STROEDER',
+  'JUAN A PRADERE', 'BAHIA SAN BLAS', 'CARDENAL CAGLIERO'];
+const DEPARTAMENTOS = ['ADOLFO ALSINA', 'GENERAL ROCA', 'BARILOCHE', 'PICHI MAHUIDA', 'AVELLANEDA', 'SAN ANTONIO', 'VALCHETA', 'NUEVE DE JULIO',
+  'EL CUY', 'PILCANIYEU', 'CONESA', '25 DE MAYO', 'NORQUINCO', 'PATAGONES'];
+const USOS = ['PRIVADO', 'PUBLICO', 'OFICIAL', 'DIPLOMATICO', 'ESPECIAL', 'ALQUILER'];
+const PARTICULAS = ['DE', 'DEL', 'LA', 'LAS', 'LOS', 'SAN', 'SANTA', 'VAN', 'VON', 'DA', 'DI', 'DOS', 'MC', 'MAC'];
+
+const LABELS = [
+  { key: 'dominio', L: 'DOMINIO', tol: 2 }, { key: 'marca', L: 'MARCA', tol: 1 }, { key: 'modelo', L: 'MODELO', tol: 2 },
+  { key: 'tipo', L: 'TIPO', tol: 1 }, { key: 'uso', L: 'USO', tol: 0 }, { key: 'chasis', L: 'CHASIS', tol: 2 },
+  { key: 'motor', L: 'MOTOR', tol: 1 }, { key: 'titular', L: 'TITULAR', tol: 2 }, { key: 'doc', L: 'DOC', tol: 0 },
+  { key: 'domicilio', L: 'DOMICILIO', tol: 2 }
+];
+const ORDEN_ANVERSO = ['dominio', 'marca', 'modelo', 'tipo', 'uso', 'chasis', 'motor'];
+const WL_ALNUM = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const WL_VIN = 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789';
+const WL_NUM = '0123456789.';
+
+function norm(s) {
+  return String(s || '').toUpperCase().replace(/Ñ/g, '\u0001').normalize('NFD')
+    .replace(/[̀-ͯ]/g, '').replace(/\u0001/g, 'Ñ');
+}
+function squash(s) { return norm(s).replace(/[^A-Z0-9Ñ]/g, ''); }
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = []; for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function snapList(text, list) {
+  const a = squash(text); if (!a) return '';
+  let best = '', bd = 99;
+  for (const p of list) {
+    const ps = squash(p);
+    const tol = ps.length <= 3 ? 0 : ps.length <= 5 ? 1 : 2;
+    const d = lev(a, ps);
+    if (d <= tol && d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+function avg(arr) { return arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : 0; }
+
+/* ---------- imagen ---------- */
+function loadGray(src, maxSide, deps) {
+  const s = Math.min(1, maxSide / Math.max(src.width, src.height));
+  const w = Math.round(src.width * s), h = Math.round(src.height * s);
+  const c = deps.createCanvas(w, h); const g = c.getContext('2d'); g.drawImage(src, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data; const a = new Float32Array(w * h);
+  for (let i = 0; i < a.length; i++) a[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  return { w, h, g: a };
+}
+function boxMean(src, w, h, r) {
+  const W1 = w + 1, I = new Float64Array(W1 * (h + 1));
+  for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += src[y * w + x]; I[(y + 1) * W1 + x + 1] = I[y * W1 + x + 1] + row; } }
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+      out[y * w + x] = (I[y1 * W1 + x1] - I[y0 * W1 + x1] - I[y1 * W1 + x0] + I[y0 * W1 + x0]) / ((x1 - x0) * (y1 - y0));
+    }
+  }
+  return out;
+}
+// Fotos con poca luz (rango de grises angosto): se estira el rango (percentiles 2 y 98). Las fotos normales no se tocan.
+function ajustarLuz(G) {
+  const h = new Uint32Array(256); for (let i = 0; i < G.g.length; i++) h[Math.max(0, Math.min(255, G.g[i] | 0))]++;
+  const n = G.g.length; let acc = 0, lo = 0, hi = 255;
+  for (let v = 0; v < 256; v++) { acc += h[v]; if (acc >= n * 0.02) { lo = v; break; } }
+  acc = 0; for (let v = 255; v >= 0; v--) { acc += h[v]; if (acc >= n * 0.02) { hi = v; break; } }
+  if (hi - lo >= 150 || hi - lo < 40) return G;
+  const o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = (G.g[i] - lo) * 255 / (hi - lo);
+  return { w: G.w, h: G.h, g: o };
+}
+const VARIANTES = [
+  { name: 'contraste', fn: G => { const N = ajustarLuz(G), o = new Float32Array(N.g.length); for (let i = 0; i < o.length; i++) o[i] = (N.g[i] - 128) * 1.3 + 128; return o; } },
+  { name: 'adaptivo', fn: G => { const N = ajustarLuz(G), sm = boxMean(N.g, G.w, G.h, 1), m = boxMean(N.g, G.w, G.h, 22); const o = new Float32Array(N.g.length); for (let i = 0; i < o.length; i++) o[i] = sm[i] < m[i] * 0.88 ? 0 : 255; return o; } }
+];
+function arrToCanvas(deps, w, h, arr) {
+  const c = deps.createCanvas(w, h), g = c.getContext('2d'), d = g.createImageData(w, h);
+  for (let i = 0; i < arr.length; i++) { const v = arr[i] < 0 ? 0 : arr[i] > 255 ? 255 : arr[i]; d.data[i * 4] = d.data[i * 4 + 1] = d.data[i * 4 + 2] = v; d.data[i * 4 + 3] = 255; }
+  g.putImageData(d, 0, 0); return c;
+}
+
+/* ---------- líneas ---------- */
+function buildLines(data) {
+  const lines = (data.lines || []).map(l => ({
+    text: l.text, y: (l.bbox.y0 + l.bbox.y1) / 2,
+    words: (l.words || []).map(w => ({ text: w.text, conf: w.confidence, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 }))
+      .filter(w => w.text && w.text.trim())
+  })).filter(l => l.words.length);
+  lines.sort((a, b) => a.y - b.y);
+  return lines;
+}
+function hasAlnum(t) { return /[A-Za-z0-9]/.test(t); }
+function findLabel(line, spec) {
+  let best = null;
+  const n = Math.min(line.words.length, 6);
+  for (let i = 0; i < n; i++) {
+    const t = squash(line.words[i].text); if (!t) continue;
+    const d = t.startsWith(spec.L) ? 0 : lev(t, spec.L);
+    if (d <= spec.tol && (!best || d < best.d)) best = { idx: i, d };
+  }
+  if (!best) return null;
+  if (!line.words.slice(best.idx + 1).some(w => hasAlnum(w.text))) return null;
+  return best;
+}
+function makeEntry(key, line, labelIdx, minConf, firstOnly, endX) {
+  const ws = line.words, lw = labelIdx >= 0 ? ws[labelIdx] : null;
+  let after = ws.slice(labelIdx + 1).filter(w => hasAlnum(w.text) && (!endX || w.x1 <= endX + 1));
+  if (!after.length) return null;
+  // cortar donde hay un hueco horizontal grande (ruido lejano a la derecha)
+  const cut = [after[0]];
+  for (let i = 1; i < after.length; i++) { if (after[i].x0 - after[i - 1].x1 > 220) break; cut.push(after[i]); }
+  after = cut;
+  let sig = after.filter(w => w.conf >= minConf);
+  if (!sig.length) sig = after.filter(w => w.conf >= 20);
+  if (!sig.length) sig = after;
+  const last = sig[sig.length - 1];
+  let used = after.filter(w => w.x1 <= last.x1 + 1);
+  if (firstOnly) used = [sig[0]];
+  const left = lw ? lw.x1 + 4 : used[0].x0 - 8;
+  const right = used[used.length - 1].x1 + 25;
+  const top = Math.min(lw ? lw.y0 : 1e9, ...used.map(w => w.y0)) - 10;
+  const bottom = Math.max(lw ? lw.y1 : 0, ...used.map(w => w.y1)) + 10;
+  return {
+    key, line, rect: { left, top, width: right - left, height: bottom - top },
+    cands: [{ text: used.map(w => w.text).join(' '), conf: avg(used.map(w => w.conf)), src: 'p1' }]
+  };
+}
+const MINCONF = { dominio: 40, marca: 55, modelo: 55, tipo: 55, uso: 55, chasis: 0, motor: 0, titular: 40, doc: 40, domicilio: 40, depto: 55 };
+
+function parseLines(lines) {
+  const entries = {}, usedLines = new Set(), hits = {};
+  const all = [];
+  LABELS.forEach((spec, si) => lines.forEach((ln, li) => { const h = findLabel(ln, spec); if (h) all.push({ key: spec.key, si, li, h }); }));
+  all.sort((a, b) => a.h.d - b.h.d || a.li - b.li || a.si - b.si);
+  for (const c of all) {
+    if (hits[c.key] || usedLines.has(c.li)) continue;
+    hits[c.key] = { li: c.li, h: c.h }; usedLines.add(c.li);
+  }
+  // huecos del anverso: si falta una etiqueta entre dos vecinas, se usa la única línea candidata
+  ORDEN_ANVERSO.forEach((key, k) => {
+    if (hits[key]) return;
+    const prev = ORDEN_ANVERSO.slice(0, k).reverse().find(x => hits[x]);
+    const next = ORDEN_ANVERSO.slice(k + 1).find(x => hits[x]);
+    if (!prev || !next) return;
+    const missing = ORDEN_ANVERSO.slice(ORDEN_ANVERSO.indexOf(prev) + 1, ORDEN_ANVERSO.indexOf(next)).filter(x => !hits[x]);
+    if (missing.length !== 1) return;
+    const cand = [];
+    for (let li = hits[prev].li + 1; li < hits[next].li; li++) {
+      if (usedLines.has(li)) continue;
+      const alpha = lines[li].words.filter(w => /[A-Za-z]{3}/.test(w.text) && w.conf >= 30);
+      if (alpha.length) cand.push({ li, score: alpha.reduce((s, w) => s + w.conf * w.text.length, 0) });
+    }
+    if (!cand.length) return;
+    cand.sort((a, b) => b.score - a.score);
+    const li = cand[0].li, ws = lines[li].words;
+    let lab = -1;
+    for (let i = 0; i < Math.min(3, ws.length); i++) { if (squash(ws[i].text).length >= 4 && /[A-Z]{4}/.test(squash(ws[i].text))) break; if (squash(ws[i].text).length <= 3) lab = i; }
+    usedLines.add(li); hits[key] = { li, h: { idx: lab, d: 5 } };
+  });
+  // si "DOMINIO" no tiene una patente como valor, en realidad es la línea del domicilio (etiqueta mal leída)
+  if (hits.dominio && !hits.domicilio) {
+    const ws = lines[hits.dominio.li].words.slice(hits.dominio.h.idx + 1).filter(w => hasAlnum(w.text));
+    if (!ws.some(w => fixDominio(w.text))) { hits.domicilio = hits.dominio; delete hits.dominio; }
+  }
+  for (const key of Object.keys(hits)) {
+    const { li, h } = hits[key];
+    const e = makeEntry(key, lines[li], h.idx, MINCONF[key] || 40, key === 'dominio');
+    if (e) { e.li = li; entries[key] = e; }
+  }
+  // domicilio: la calle y el número se leen por un lado y la localidad (después de "Depto.") por otro
+  if (hits.domicilio) {
+    const ln = lines[hits.domicilio.li], ws = ln.words;
+    const iD = ws.findIndex((w, i) => i > hits.domicilio.h.idx && /^(DEPTO|DPTO|DTO)/.test(squash(w.text)));
+    if (iD >= 0) {
+      const rest = ws.slice(iD + 1).filter(w => hasAlnum(w.text));
+      let locWords = rest, depWord = null;
+      if (rest.length > 1 && squash(rest[0].text).length <= 2) { depWord = rest[0]; locWords = rest.slice(1); }
+      if (locWords.length) {
+        const endW = depWord || ws[iD];
+        const ed = makeEntry('domicilio', ln, hits.domicilio.h.idx, MINCONF.domicilio, false, endW.x1);
+        const el = makeEntry('localidad', { words: locWords }, -1, MINCONF.domicilio, false);
+        if (ed && el) { ed.li = hits.domicilio.li; entries.domicilio = ed; entries.localidad = el; }
+      }
+    }
+  }
+  // línea de departamento + provincia: la que sigue al domicilio
+  if (hits.domicilio) {
+    for (let li = hits.domicilio.li + 1; li < Math.min(lines.length, hits.domicilio.li + 3); li++) {
+      const ws = lines[li].words;
+      if (ws.filter(w => /[A-Za-z]{3}/.test(w.text) && w.conf >= 60).length >= 1) {
+        const e = makeEntry('depto', lines[li], -1, MINCONF.depto, false);
+        if (e) { entries.depto = e; }
+        break;
+      }
+    }
+  }
+  return entries;
+}
+
+/* ---------- correcciones por tipo de dato ---------- */
+const A_DIG = { O: '0', Q: '0', D: '0', I: '1', L: '1', Z: '2', S: '5', B: '8', G: '6' };
+const A_LET = { 0: 'O', 1: 'I', 2: 'Z', 5: 'S', 8: 'B', 6: 'G' };
+function fixDominio(t) {
+  const s = squash(t); if (s.length < 6) return '';
+  const pats = ['LLLDDD', 'LLDDDLL', 'DDDLLL', 'LDDDLLL'];
+  let best = null;
+  for (const p of pats) {
+    for (let st = 0; st + p.length <= s.length; st++) {
+      const sub = s.slice(st, st + p.length); let cost = 0, out = '';
+      for (let i = 0; i < p.length; i++) {
+        const ch = sub[i], isD = /\d/.test(ch), isL = /[A-Z]/.test(ch);
+        if (p[i] === 'D') { if (isD) out += ch; else if (A_DIG[ch]) { out += A_DIG[ch]; cost++; } else { cost += 5; out += ch; } }
+        else { if (isL) out += ch; else if (A_LET[ch]) { out += A_LET[ch]; cost++; } else { cost += 5; out += ch; } }
+      }
+      cost += (s.length - p.length) * 0.3 + st * 0.1 + (p === 'LLLDDD' || p === 'LLDDDLL' ? 0 : 0.5);
+      if (!best || cost < best.cost) best = { out, cost };
+    }
+  }
+  return best && best.cost <= 2.5 ? best.out : '';
+}
+function validDominio(v) { return /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2}|\d{3}[A-Z]{3}|[A-Z]\d{3}[A-Z]{3})$/.test(v); }
+function fixChasis(t) {
+  let s = squash(t).replace(/[IOQ]/g, ch => ch === 'I' ? '1' : '0');
+  if (s.length < 8) return '';
+  if (s.length === 17) {
+    const a = s.split('');
+    if (a[0] === '0') a[0] = a[1] === 'A' ? '8' : '9';
+    for (let i = 11; i < 17; i++) if (A_DIG[a[i]] && /[A-Z]/.test(a[i])) a[i] = A_DIG[a[i]];
+    s = a.join('');
+  }
+  return s;
+}
+function validChasis(v) { return /^[A-HJ-NPR-Z0-9]{17}$/.test(v); }
+function fixMotor(t) { const s = squash(t); return s.length >= 5 ? s : ''; }
+function fixDoc(t) { const s = String(t).replace(/[^0-9]/g, ''); return s.length >= 6 && s.length <= 9 ? s : ''; }
+
+
+/* ---------- chasis: dígito verificador y sugerencias ---------- */
+const VIN_TR = { A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8, J: 1, K: 2, L: 3, M: 4, N: 5, P: 7, R: 9, S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9 };
+const VIN_W = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+const VIN_ALT = { S: ['5'], '5': ['S'], E: ['6'], '6': ['E', 'G'], G: ['6'], B: ['8'], '8': ['B'], Z: ['2'], '2': ['Z'], D: ['0'], '0': ['D'], U: ['V'], V: ['U'], '1': ['7'], '7': ['1'], T: ['7'] };
+function vinCheckOk(v) {
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(v)) return false;
+  let sum = 0;
+  for (let i = 0; i < 17; i++) { const c = v[i]; sum += (/\d/.test(c) ? +c : VIN_TR[c]) * VIN_W[i]; }
+  const r = sum % 11; return v[8] === (r === 10 ? 'X' : String(r));
+}
+// Si la lectura no cumple el dígito verificador, busca correcciones por letras parecidas (5/S, 6/E, 8/B, 2/Z, 0/D…).
+// Solo se ofrece como sugerencia cuando hay una única corrección posible.
+function vinSugerir(v) {
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(v) || vinCheckOk(v)) return [];
+  const c9 = v[8];
+  if (!(/[0-9X]/.test(c9) || (VIN_ALT[c9] || []).some(a => /\d/.test(a)))) return [];
+  const pos = []; for (let i = 0; i < 17; i++) if (VIN_ALT[v[i]]) pos.push(i);
+  const out = new Set();
+  const rec = (start, left, cur, n) => {
+    if (n > 0 && vinCheckOk(cur)) out.add(cur);
+    if (!left) return;
+    for (let k = start; k < pos.length; k++) { const i = pos[k]; for (const a of VIN_ALT[v[i]]) rec(k + 1, left - 1, cur.slice(0, i) + a + cur.slice(i + 1), n + 1); }
+  };
+  rec(0, 2, v, 0);
+  return out.size === 1 ? [...out] : [];
+}
+
+function voteCode(cands, fix, valid) {
+  const items = cands.map(c => { const f = fix(c.text); return f ? { v: f, conf: c.conf || 0 } : null; }).filter(Boolean);
+  if (!items.length) return { value: '', valid: false };
+  const g = new Map();
+  items.forEach(i => { const e = g.get(i.v) || { v: i.v, n: 0, conf: 0 }; e.n++; e.conf = Math.max(e.conf, i.conf); g.set(i.v, e); });
+  const groups = [...g.values()];
+  const byLen = {}; items.forEach(i => { (byLen[i.v.length] = byLen[i.v.length] || []).push(i); });
+  const top = Object.values(byLen).sort((a, b) => b.length - a.length || avg(b.map(x => x.conf)) - avg(a.map(x => x.conf)))[0];
+  if (top.length >= 3) {
+    let voted = '';
+    for (let p = 0; p < top[0].v.length; p++) {
+      const t = {}; top.forEach(i => { t[i.v[p]] = (t[i.v[p]] || 0) + 1 + i.conf / 100; });
+      voted += Object.keys(t).sort((a, b) => t[b] - t[a])[0];
+    }
+    if (!g.has(voted)) groups.push({ v: voted, n: top.length - 0.5, conf: avg(top.map(x => x.conf)) });
+  }
+  groups.forEach(e => { e.s = e.n + (valid(e.v) ? 3 : 0) + e.conf / 1000; });
+  groups.sort((a, b) => b.s - a.s);
+  return { value: groups[0].v, valid: valid(groups[0].v) };
+}
+function cleanText(t) {
+  let s = norm(t).replace(/[^A-Z0-9Ñ.\/ -]/g, ' ').replace(/\s+/g, ' ').trim();
+  let tok = s.split(' ').filter(Boolean);
+  while (tok.length > 1 && tok[tok.length - 1].length <= 2 && !/^\d+$/.test(tok[tok.length - 1])) tok.pop();
+  while (tok.length > 1 && /^[-./]+$/.test(tok[tok.length - 1])) tok.pop();
+  return tok.join(' ').replace(/^[-.\/ ]+|[-.\/ ]+$/g, '');
+}
+// ¿al menos dos lecturas distintas dieron lo mismo? (post: normalización opcional, p. ej. ajustar a una lista)
+function acuerdo(cands, post) {
+  const k = {}; cands.forEach(c => { let v = cleanText(c.text); if (post) v = post(v) || v; const q = squash(v); if (q) k[q] = (k[q] || 0) + 1; });
+  return Object.values(k).some(n => n >= 2);
+}
+// Ajusta cada lectura al nombre más parecido de una lista (localidades, departamentos) y vota
+function snapNombre(text, list) {
+  const a = squash(text); if (a.length < 3) return null;
+  let best = null;
+  for (const p of list) {
+    const ps = squash(p), d = lev(a, ps), tol = Math.max(2, Math.ceil(ps.length * 0.34));
+    if (d <= tol && (!best || d < best.d)) best = { p, d, len: ps.length };
+  }
+  return best;
+}
+function voteSnap(cands, list) {
+  const tot = new Map();
+  cands.forEach(c => { const b = snapNombre(c.text, list); if (b) { const e = tot.get(b.p) || { w: 0, n: 0 }; e.w += 1 - b.d / (b.len + 1); e.n++; tot.set(b.p, e); } });
+  const arr = [...tot.entries()].sort((x, y) => y[1].w - x[1].w);
+  return arr.length ? { value: arr[0][0], n: arr[0][1].n } : null;
+}
+function voteText(cands, post) {
+  const g = new Map();
+  cands.forEach(c => {
+    let v = cleanText(c.text); if (post) v = post(v); if (!v || v.length < 2) return;
+    const k = squash(v); const e = g.get(k) || { v, n: 0, conf: 0 };
+    e.n++; e.conf = Math.max(e.conf, c.conf || 0); g.set(k, e);
+  });
+  const arr = [...g.values()]; if (!arr.length) return '';
+  arr.forEach(e => e.s = e.n + e.conf / 100); arr.sort((a, b) => b.s - a.s);
+  return arr[0].v;
+}
+
+/* ---------- datos del reverso ---------- */
+function splitTitular(v) {
+  const tok = v.split(' ').filter(Boolean); if (!tok.length) return { apellido: '', nombres: '' };
+  let i = 0; while (i < tok.length - 1 && PARTICULAS.includes(tok[i])) i++;
+  i++;
+  return { apellido: tok.slice(0, i).join(' '), nombres: tok.slice(i).join(' ') };
+}
+function parseDomicilio(raw) {
+  let s = norm(raw).replace(/"/g, ' ').replace(/(\d)\s*[%]/g, '$1º').replace(/[^A-Z0-9Ñ\s.:\/º°-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = s.match(/^(.*?)\bN[^A-Z0-9]{0,4}(\d{1,6}[A-Z]?)\b(.*)$/) || s.match(/^(.*?)\b(S\/N)\b(.*)$/);
+  let calle = s, num = '', rest = '';
+  if (m) { calle = m[1]; num = m[2]; rest = m[3]; }
+  calle = calle.replace(/[\s.:-]+$/g, '').trim();
+  let t = rest.trim(), piso = '', depto = '';
+  const noise = /^[\s:.\-—=_~]+/;
+  if (/^P[I1L]S[O0]\b/.test(t)) {
+    t = t.replace(/^P[I1L]S[O0][\s:.]*/, '').replace(noise, '');
+    if (!/^(DEP|DPT|DTO)/.test(t)) { const mm = t.match(/^([A-Z0-9]{1,2})\b\s*(.*)$/); if (mm) { piso = mm[1]; t = mm[2]; } else t = t.replace(/^\S+\s*/, ''); }
+  }
+  if (/^(DEPTO|DPTO|DTO|DEP)/.test(t)) {
+    t = t.replace(/^(DEPTO|DPTO|DTO|DEP)[\s:.]*/, '').replace(noise, '');
+    const mm = t.match(/^([A-Z0-9]{1,2})\b\s+(\S.*)$/); if (mm) { depto = mm[1]; t = mm[2]; }
+  }
+  const localidad = cleanText(t.replace(noise, ''));
+  const dom = [calle, num ? 'N° ' + num : '', piso ? 'PISO ' + piso : '', depto ? 'DPTO ' + depto : ''].filter(Boolean).join(' ');
+  return { domicilio: dom.trim(), localidad };
+}
+function parseDepProv(raw) {
+  const tok = norm(raw).replace(/[^A-Z0-9Ñ\s]/g, ' ').split(/\s+/).filter(Boolean);
+  let best = null;
+  for (let n = 1; n <= Math.min(4, tok.length); n++) {
+    const tail = tok.slice(-n).join('');
+    for (const p of PROVINCIAS) {
+      const ps = p.replace(/ /g, ''), d = lev(tail, ps);
+      if (d <= Math.max(1, Math.floor(ps.length * 0.2)) && (!best || d < best.d || (d === best.d && n > best.n))) best = { d, n, p };
+    }
+  }
+  if (!best) return { departamento: cleanText(tok.join(' ')), provincia: '' };
+  return { departamento: cleanText(tok.slice(0, tok.length - best.n).join(' ')), provincia: best.p };
+}
+
+/* ---------- segunda pasada y armado ---------- */
+async function rereadRect(W, input, rect, wl) {
+  await W.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: wl || '' });
+  const r = await W.recognize(input, { rectangle: rect });
+  return { text: (r.data.text || '').trim(), conf: r.data.confidence || 0 };
+}
+const WL_POR_CAMPO = { dominio: WL_ALNUM, chasis: WL_VIN, motor: WL_ALNUM, doc: WL_NUM };
+
+async function readCardPhoto(src, deps, log) {
+  log = log || function () { };
+  const G = loadGray(src, 2000, deps);
+  const variantes = [];
+  for (const v of VARIANTES) variantes.push({ name: v.name, input: await deps.canvasToInput(arrToCanvas(deps, G.w, G.h, v.fn(G))) });
+  const W = deps.worker;
+  await W.setParameters({ tessedit_pageseg_mode: '3', tessedit_char_whitelist: '' });
+  const r1 = await W.recognize(variantes[0].input);
+  const lines = buildLines(r1.data);
+  const entries = parseLines(lines);
+  const keys = Object.keys(entries);
+  let k = 0;
+  for (const key of keys) {
+    const e = entries[key]; k++;
+    log('Afinando datos ' + k + '/' + keys.length + '…');
+    const r = e.rect;
+    r.left = Math.max(0, Math.round(r.left)); r.top = Math.max(0, Math.round(r.top));
+    r.width = Math.max(20, Math.min(G.w - r.left, Math.round(r.width))); r.height = Math.max(20, Math.min(G.h - r.top, Math.round(r.height)));
+    for (const v of variantes) {
+      try { const x = await rereadRect(W, v.input, r, WL_POR_CAMPO[key]); if (x.text) e.cands.push({ text: x.text, conf: x.conf, src: v.name }); } catch (err) { /* se ignora */ }
+    }
+  }
+  const f = {}, flags = {};
+  const get = key => (entries[key] ? entries[key].cands : []);
+  const d = voteCode(get('dominio'), fixDominio, validDominio); f.dominio = d.value; if (f.dominio && !d.valid) flags.dominio = 1;
+  const c = voteCode(get('chasis'), fixChasis, validChasis); f.chasis = c.value; if (f.chasis && !vinCheckOk(f.chasis)) flags.chasis = 1;
+  const suggest = {}; const sg = vinSugerir(f.chasis || ''); if (sg.length) suggest.chasis = sg;
+  f.motor = voteCode(get('motor'), fixMotor, v => v.length >= 6).value;
+  f.marca = voteText(get('marca'), v => snapList(v, MARCAS) || v);
+  f.modelo = voteText(get('modelo'));
+  f.tipo = voteText(get('tipo'));
+  const POSTS = { marca: v => snapList(v, MARCAS), uso: v => snapList(v, USOS) };
+  ['marca', 'modelo', 'tipo', 'uso', 'titular'].forEach(k => { if (entries[k] && !acuerdo(get(k), POSTS[k])) flags[k === 'titular' ? 'apellido' : k] = 1; });
+  f.uso = voteText(get('uso'), v => snapList(v, USOS) || v);
+  const t = splitTitular(voteText(get('titular'))); f.apellido = t.apellido; f.nombres = t.nombres;
+  f.dni_titular = voteCode(get('doc'), fixDoc, v => v.length >= 7 && v.length <= 8).value;
+  if (entries.domicilio) {
+    const dm = parseDomicilio(bestRaw(get('domicilio')));
+    f.domicilio = dm.domicilio; f.localidad = dm.localidad;
+    if (!acuerdo(get('domicilio'))) flags.domicilio = 1;
+  }
+  const extra = deps.extra || {};
+  const listaLoc = LOCALIDADES.concat(extra.localidades || []);
+  if (entries.localidad) {
+    const sn = voteSnap(get('localidad'), listaLoc);
+    if (sn) { f.localidad = sn.value; if (sn.n < 2) flags.localidad = 1; }
+    else { const lc = voteText(get('localidad'), v => v.replace(/^[^A-Z]+/, '')); if (lc) f.localidad = lc; flags.localidad = 1; }
+  }
+  if (entries.depto) {
+    const dp = parseDepProv(bestRaw(get('depto'))); f.departamento = dp.departamento; f.provincia = dp.provincia;
+    const sd = snapNombre(dp.departamento, DEPARTAMENTOS.concat(extra.departamentos || [])); if (sd) f.departamento = sd.p;
+    if (!dp.provincia) flags.provincia = 1;
+  }
+  Object.keys(f).forEach(key => { if (!f[key]) delete f[key]; });
+  const debug = keys.map(key => key + ': ' + entries[key].cands.map(x => '[' + x.src + '] ' + x.text.replace(/\s+/g, ' ')).join(' | ')).join('\n');
+  return { fields: f, flags, suggest, debug, text: r1.data.text };
+}
+// para domicilio y depto se parte del texto "crudo" con mayor confianza (sin recortar tokens)
+function bestRaw(cands) {
+  const ok = cands.filter(c => c.src !== 'p1' && c.text);
+  const pool = ok.length ? ok : cands;
+  return pool.slice().sort((a, b) => b.conf - a.conf)[0].text;
+}
+/* OCR-CORE-END */
 
 const $ = s => document.querySelector(s);
-const FIELDS = ['dominio','tipo','marca','modelo','anio','color','chasis','motor','titular','dni_titular','observaciones'];
+const FIELDS = ['dominio','marca','modelo','tipo','uso','chasis','motor','apellido','nombres','dni_titular','domicilio','localidad','departamento','provincia','anio','color','observaciones'];
 let token = null, nivel = 0, rows = [], editingId = null;
+const photos = { a: null, b: null };
 
 function toast(t, kind) {
   const m = $('#msg'); m.textContent = t; m.className = kind || 'ok'; m.style.display = 'block';
-  clearTimeout(toast.t); toast.t = setTimeout(() => m.style.display = 'none', 4000);
+  clearTimeout(toast.t); toast.t = setTimeout(() => m.style.display = 'none', 4500);
 }
 
 async function api(action, extra) {
@@ -128,6 +649,7 @@ async function api(action, extra) {
 
 /* ---------- Login ---------- */
 window.addEventListener('load', () => {
+  $('#dlProv').innerHTML = PROVINCIAS.map(p => '<option value="' + p + '">').join('');
   if (CLIENT_ID.startsWith('PEGAR') || API_URL.startsWith('PEGAR')) {
     $('#cfgWarn').textContent = 'Falta configurar CLIENT_ID y API_URL en index.html';
     return;
@@ -164,21 +686,22 @@ async function load() {
   catch (e) { toast(e.message, 'err'); }
 }
 
+function linea(cls, txt) { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = txt; return d; }
+
 function render() {
   const q = $('#q').value.trim().toLowerCase();
   const list = $('#list'); list.innerHTML = '';
-  const f = rows.filter(r => !q || FIELDS.some(k => String(r[k]).toLowerCase().includes(q)));
+  const f = rows.filter(r => !q || FIELDS.some(k => String(r[k] || '').toLowerCase().includes(q)));
   $('#count').textContent = f.length + ' de ' + rows.length + ' registros';
   f.forEach(r => {
     const c = document.createElement('div'); c.className = 'card';
-    const d = document.createElement('div'); d.className = 'dom'; d.textContent = r.dominio;
-    const l1 = document.createElement('div'); l1.textContent = [r.marca, r.modelo, r.anio, r.color, r.tipo].filter(Boolean).join(' · ');
-    const l2 = document.createElement('div'); l2.className = 'mut';
-    l2.textContent = [r.titular && 'Titular: ' + r.titular, r.dni_titular && 'DNI: ' + r.dni_titular].filter(Boolean).join(' — ');
-    const l3 = document.createElement('div'); l3.className = 'mut';
-    l3.textContent = [r.chasis && 'Chasis: ' + r.chasis, r.motor && 'Motor: ' + r.motor].filter(Boolean).join(' — ');
-    c.append(d, l1, l2, l3);
-    if (r.observaciones) { const o = document.createElement('div'); o.className = 'mut'; o.textContent = '📝 ' + r.observaciones; c.append(o); }
+    c.append(linea('dom', r.dominio));
+    c.append(linea('', [r.marca, r.modelo, r.tipo, r.uso, r.anio, r.color].filter(Boolean).join(' · ')));
+    const nom = [r.apellido, r.nombres].filter(Boolean).join(', ');
+    c.append(linea('mut', [nom && 'Titular: ' + nom, r.dni_titular && 'DNI: ' + r.dni_titular].filter(Boolean).join(' — ')));
+    c.append(linea('mut', [r.domicilio, r.localidad, r.departamento, r.provincia].filter(Boolean).join(', ')));
+    c.append(linea('mut', [r.chasis && 'Chasis: ' + r.chasis, r.motor && 'Motor: ' + r.motor].filter(Boolean).join(' — ')));
+    if (r.observaciones) c.append(linea('mut', '📝 ' + r.observaciones));
     if (nivel === 1) { const b = document.createElement('button'); b.className = 'sec'; b.textContent = 'Editar'; b.style.marginTop = '8px'; b.onclick = () => openForm(r); c.append(b); }
     list.append(c);
   });
@@ -186,17 +709,26 @@ function render() {
 $('#q').oninput = render;
 
 /* ---------- Formulario ---------- */
+function limpiarMarcas() {
+  document.querySelectorAll('#frm input.chk').forEach(i => i.classList.remove('chk'));
+  $('#legend').classList.add('hidden'); $('#sugChasis').classList.add('hidden'); $('#sugChasis').innerHTML = '';
+}
+function resetFotos() {
+  photos.a = photos.b = null;
+  document.querySelectorAll('.shot').forEach(s => { s.querySelector('.thumb').classList.add('hidden'); s.querySelector('.nombre').textContent = ''; });
+}
 function openForm(r) {
   editingId = r ? r.id : null;
   $('#dlgTitle').textContent = r ? 'Modificar vehículo' : 'Agregar vehículo';
   $('#scanBox').classList.toggle('hidden', !!r);
-  const frm = $('#frm'); frm.reset();
-  FIELDS.forEach(k => frm.elements[k].value = r ? r[k] : '');
+  const frm = $('#frm'); frm.reset(); limpiarMarcas(); resetFotos();
+  FIELDS.forEach(k => frm.elements[k].value = r ? (r[k] || '') : '');
   $('#raw').value = ''; $('#scanSt').textContent = '';
   $('#dlg').showModal();
 }
 $('#btnNew').onclick = () => openForm(null);
 $('#btnCancel').onclick = () => $('#dlg').close();
+$('#frm').addEventListener('input', e => { if (e.target.classList) e.target.classList.remove('chk'); });
 
 $('#frm').addEventListener('submit', async ev => {
   ev.preventDefault();
@@ -209,66 +741,87 @@ $('#frm').addEventListener('submit', async ev => {
   $('#btnSave').disabled = false;
 });
 
-/* ---------- OCR (Tesseract.js, corre en el navegador) ---------- */
-function shrink(file, max = 1800) {
-  return new Promise((res, rej) => {
-    const img = new Image(); const u = URL.createObjectURL(file);
-    img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s;
-      const g = c.getContext('2d'); g.filter = 'grayscale(1) contrast(1.3)'; g.drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(u); c.toBlob(b => res(b), 'image/png');
-    };
-    img.onerror = rej; img.src = u;
+/* ---------- Fotos: cámara o galería ---------- */
+document.querySelectorAll('.shot').forEach(shot => {
+  shot.querySelectorAll('input[type=file]').forEach(inp => inp.addEventListener('change', () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    photos[shot.dataset.slot] = f;
+    const im = shot.querySelector('.thumb');
+    if (im.dataset.url) URL.revokeObjectURL(im.dataset.url);
+    im.dataset.url = URL.createObjectURL(f); im.src = im.dataset.url; im.classList.remove('hidden');
+    shot.querySelector('.nombre').textContent = f.name || 'Foto';
+    inp.value = '';   // permite volver a elegir la misma foto
+  }));
+});
+
+/* ---------- Lectura de la tarjeta (Tesseract.js, corre en el navegador) ---------- */
+let ocrWorker = null;
+async function getWorker(setSt) {
+  if (ocrWorker) return ocrWorker;
+  setSt('Preparando el lector… la primera vez descarga unos 15 MB, después queda guardado.');
+  ocrWorker = await Tesseract.createWorker('spa', 1, {
+    langPath: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa@1.0.0/4.0.0_best_int',
+    logger: m => { if (/loading/.test(m.status || '')) setSt('Preparando el lector… ' + Math.round((m.progress || 0) * 100) + '%'); }
   });
+  return ocrWorker;
+}
+function abrirFoto(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), im = new Image();
+    im.onload = () => res({ im, url });
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo abrir la foto')); };
+    im.src = url;
+  });
+}
+function listasDeLaBase() {
+  const u = k => [...new Set(rows.map(r => String(r[k] || '').trim().toUpperCase()).filter(Boolean))];
+  return { localidades: u('localidad'), departamentos: u('departamento') };
 }
 
 $('#btnScan').onclick = async () => {
-  const files = [$('#f1').files[0], $('#f2').files[0]].filter(Boolean);
-  if (!files.length) return toast('Elegí al menos una foto', 'err');
-  $('#btnScan').disabled = true; let text = '';
+  const slots = ['a', 'b'].filter(s => photos[s]);
+  if (!slots.length) return toast('Sacá o elegí al menos una foto', 'err');
+  const setSt = t => { $('#scanSt').textContent = t; };
+  $('#btnScan').disabled = true; limpiarMarcas();
+  const merged = {}, flags = {}, sug = {}; let debug = '';
   try {
-    for (let i = 0; i < files.length; i++) {
-      $('#scanSt').textContent = 'Leyendo foto ' + (i + 1) + ' de ' + files.length + '… (la primera vez descarga el idioma)';
-      const blob = await shrink(files[i]);
-      const r = await Tesseract.recognize(blob, 'spa', {
-        logger: m => { if (m.status === 'recognizing text') $('#scanSt').textContent = 'Foto ' + (i + 1) + ': ' + Math.round(m.progress * 100) + '%'; }
-      });
-      text += r.data.text + '\n';
+    const worker = await getWorker(setSt);
+    const deps = {
+      createCanvas: (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; },
+      canvasToInput: c => new Promise(res => c.toBlob(res, 'image/png')),
+      worker, extra: listasDeLaBase()
+    };
+    for (const s of slots) {
+      const nombre = s === 'a' ? 'anverso' : 'reverso';
+      const { im, url } = await abrirFoto(photos[s]);
+      try {
+        const r = await readCardPhoto(im, deps, t => setSt('Leyendo ' + nombre + '… ' + t));
+        Object.keys(r.fields).forEach(k => { if (!(k in merged)) merged[k] = r.fields[k]; });
+        Object.assign(flags, r.flags); Object.assign(sug, r.suggest || {});
+        debug += '=== ' + nombre.toUpperCase() + ' ===\n' + r.debug + '\n\n--- texto completo ---\n' + r.text + '\n\n';
+      } finally { URL.revokeObjectURL(url); }
     }
-    $('#raw').value = text;
-    fillFromText(text);
-    $('#scanSt').textContent = 'Listo. Revisá y corregí los campos antes de guardar.';
-  } catch (e) { toast('No se pudo leer: ' + e.message, 'err'); }
+    const el = $('#frm').elements; let n = 0;
+    Object.keys(merged).forEach(k => { if (el[k]) { el[k].value = merged[k]; n++; if (flags[k]) el[k].classList.add('chk'); } });
+    // los campos que no se pudieron leer también se marcan, así se nota qué falta
+    const esperados = [];
+    if (photos.a) esperados.push('dominio', 'marca', 'modelo', 'tipo', 'uso', 'chasis', 'motor');
+    if (photos.b) esperados.push('apellido', 'nombres', 'dni_titular', 'domicilio', 'localidad', 'departamento', 'provincia');
+    const faltan = esperados.filter(k => !merged[k]);
+    faltan.forEach(k => el[k].classList.add('chk'));
+    if (sug.chasis && sug.chasis.length) {
+      const box = $('#sugChasis'); box.innerHTML = '';
+      box.append('Ese chasis no cumple el dígito verificador. ¿Será ');
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = sug.chasis[0];
+      b.onclick = () => { el.chasis.value = sug.chasis[0]; el.chasis.classList.remove('chk'); box.classList.add('hidden'); };
+      box.append(b, '?'); box.classList.remove('hidden');
+    }
+    $('#raw').value = debug;
+    $('#legend').classList.toggle('hidden', !document.querySelector('#frm input.chk'));
+    setSt(n ? 'Listo: se completaron ' + n + ' campos. Revisá los marcados en amarillo y corregí lo que haga falta.' : 'No se pudo leer ningún dato. Probá con otra foto, más cerca y con más luz.');
+  } catch (e) { setSt(''); toast('No se pudo leer: ' + (e.message || e), 'err'); }
   $('#btnScan').disabled = false;
 };
-
-function fillFromText(text) {
-  const frm = $('#frm').elements;
-  const T = text.toUpperCase().replace(/[|]/g, 'I');
-  const set = (k, v) => { if (v && !frm[k].value) frm[k].value = v.trim(); };
-  const after = (labels) => {
-    for (const l of labels) {
-      const m = T.match(new RegExp(l + '\\s*[:.\\-]?\\s*([A-Z0-9ÁÉÍÓÚÑ .\\/-]{2,40})'));
-      if (m) return m[1].split(/\s{2,}|\n/)[0];
-    }
-    return '';
-  };
-  const dom = T.match(/\b([A-Z]{2}\s?\d{3}\s?[A-Z]{2}|[A-Z]{3}\s?\d{3}|\d{3}\s?[A-Z]{3}|[A-Z]\d{3}\s?[A-Z]{3})\b/);
-  if (dom) set('dominio', dom[1].replace(/\s/g, ''));
-  const vin = T.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-  if (vin) set('chasis', vin[0]); else set('chasis', after(['CHASIS', 'N[°º] DE CHASIS']).replace(/\s/g, ''));
-  set('motor', after(['MOTOR', 'N[°º] DE MOTOR']).replace(/\s/g, ''));
-  set('marca', after(['MARCA']));
-  set('modelo', after(['MODELO']));
-  set('tipo', after(['TIPO']));
-  set('color', after(['COLOR']));
-  const yr = after(['MODELO A[ÑN]O', 'A[ÑN]O']).match(/(19|20)\d{2}/) || T.match(/\b(19[89]\d|20[0-3]\d)\b/);
-  if (yr) set('anio', yr[0]);
-  const dni = T.match(/\b\d{1,2}\.?\d{3}\.?\d{3}\b/);
-  if (dni) set('dni_titular', dni[0].replace(/\./g, ''));
-  set('titular', after(['TITULAR', 'APELLIDO Y NOMBRE', 'NOMBRE']));
-}
 </script>
 </body>
 </html>
